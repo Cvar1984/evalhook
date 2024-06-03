@@ -47,13 +47,13 @@ zend_module_entry evalhook_module_entry = {
 ZEND_GET_MODULE(evalhook)
 #endif
 
-    static zend_op_array *(*orig_compile_string)(zval *source_string, char *filename TSRMLS_DC);
+    static zend_op_array *(*orig_compile_string)(zval *source_string, char *filename);
     static zend_bool evalhook_hooked = 0;
-static zend_op_array *evalhook_compile_string(zval *source_string, char *filename TSRMLS_DC)
+static zend_op_array *evalhook_compile_string(zval *source_string, char *filename)
 {
     /* Ignore non string eval() */
     if (Z_TYPE_P(source_string) != IS_STRING) {
-        return orig_compile_string(source_string, filename TSRMLS_CC);
+        return orig_compile_string(source_string, filename);
     }
 
     int len  = Z_STRLEN_P(source_string);
@@ -71,7 +71,7 @@ static zend_op_array *evalhook_compile_string(zval *source_string, char *filenam
 
         char c = getchar();
         if (c == 'y' || c == 'Y') {
-            return orig_compile_string(source_string, filename TSRMLS_CC);
+            return orig_compile_string(source_string, filename);
         }
         else if (c == 'n' || c == 'N') {
             zend_error(E_ERROR, "evalhook: script abort due to disallowed eval()");
@@ -84,8 +84,10 @@ PHP_MINIT_FUNCTION(evalhook)
 {
     if (evalhook_hooked == 0) {
         evalhook_hooked = 1;
-        orig_compile_string = zend_compile_string;
-        zend_compile_string = evalhook_compile_string;
+	orig_compile_string = (zend_op_array *(*)(zval *, char *))zend_compile_string;
+	zend_compile_string = (zend_op_array *(*)(zend_string *, const char *, zend_compile_position))evalhook_compile_string;
+
+
     }
     return SUCCESS;
 }
@@ -94,7 +96,8 @@ PHP_MSHUTDOWN_FUNCTION(evalhook)
 {
     if (evalhook_hooked == 1) {
         evalhook_hooked = 0;
-        zend_compile_string = orig_compile_string;
+	zend_compile_string = (zend_op_array *(*)(zend_string *, const char *, zend_compile_position))evalhook_compile_string;
+
     }
     return SUCCESS;
 }
